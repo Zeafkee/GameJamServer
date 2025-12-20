@@ -41,14 +41,12 @@ class NPCResponseReq(BaseModel):
     contextText: str
     playerText: str
     score: int
-    commitment: int
+
 
 class NPCResponseRes(BaseModel):
     npc_text: str
     mood: str
-    commitment_delta: int
-    commitment: int
-    sanity: int
+
 
 
 # blacklist patterns for immediate flagging (case-insensitive)
@@ -353,24 +351,16 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server_openrouter:app", host="127.0.0.1", port=8000, reload=True)
 
-def resolve_mood(score: int):
+def resolve_mood(score: int) -> str:
     if score >= 70:
-        return "calm", +5
+        return "calm"
     elif score >= 50:
-        return "uneasy", 0
+        return "uneasy"
     elif score >= 20:
-        return "angry", -15
+        return "angry"
     else:
-        return "enraged", -30
+        return "enraged"
 
-    if score >= 70:
-        return "calm", -5
-    elif score >= 50:
-        return "uneasy", +5
-    elif score >= 20:
-        return "angry", +15
-    else:
-        return "enraged", +30
     
 def build_npc_prompt(context: str, player_answer: str, mood: str) -> str:
     return f"""
@@ -397,19 +387,13 @@ Your response:
 """
 @app.post("/npc_response", response_model=NPCResponseRes)
 def npc_response(req: NPCResponseReq):
-    mood, commitment_delta = resolve_mood(req.score)
+    mood = resolve_mood(req.score)
 
-    new_commitment = max(0, req.commitment + commitment_delta)
-    sanity = max(0, 100 - new_commitment)
-
-    # If no OpenRouter key, fallback to simple text
+    # OpenRouter yoksa fallback
     if not OPENROUTER_KEY:
         return {
-            "npc_text": "The peasant stares at you silently.",
-            "mood": mood,
-            "commitment_delta": commitment_delta,
-            "commitment": new_commitment,
-            "sanity": sanity
+            "npc_text": "The peasant looks at you with tired eyes.",
+            "mood": mood
         }
 
     prompt = build_npc_prompt(
@@ -428,8 +412,8 @@ def npc_response(req: NPCResponseReq):
     payload = {
         "model": MODEL_NAME,
         "messages": [{"role": "system", "content": prompt}],
-        "temperature": 0.7,      # IMPORTANT: allow variation
-        "max_tokens": 80         # Cheap + fast
+        "temperature": 0.7,
+        "max_tokens": 80
     }
 
     try:
@@ -441,20 +425,14 @@ def npc_response(req: NPCResponseReq):
         )
     except Exception:
         return {
-            "npc_text": "The peasant growls and turns away.",
-            "mood": mood,
-            "commitment_delta": commitment_delta,
-            "commitment": new_commitment,
-            "sanity": sanity
+            "npc_text": "The peasant turns away without a word.",
+            "mood": mood
         }
 
     if r.status_code != 200:
         return {
-            "npc_text": "The peasant clenches his fists in silence.",
-            "mood": mood,
-            "commitment_delta": commitment_delta,
-            "commitment": new_commitment,
-            "sanity": sanity
+            "npc_text": "The peasant clenches his jaw and says nothing.",
+            "mood": mood
         }
 
     body = r.json()
@@ -462,8 +440,6 @@ def npc_response(req: NPCResponseReq):
 
     return {
         "npc_text": npc_text,
-        "mood": mood,
-        "commitment_delta": commitment_delta,
-        "commitment": new_commitment,
-        "sanity": sanity
+        "mood": mood
     }
+
