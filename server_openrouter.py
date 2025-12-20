@@ -41,13 +41,13 @@ class NPCResponseReq(BaseModel):
     contextText: str
     playerText: str
     score: int
-    anger: int
+    commitment: int
 
 class NPCResponseRes(BaseModel):
     npc_text: str
     mood: str
-    anger_delta: int
-    anger: int
+    commitment_delta: int
+    commitment: int
     sanity: int
 
 
@@ -388,18 +388,18 @@ Your response:
 """
 @app.post("/npc_response", response_model=NPCResponseRes)
 def npc_response(req: NPCResponseReq):
-    mood, anger_delta = resolve_mood(req.score)
+    mood, commitment_delta = resolve_mood(req.score)
 
-    new_anger = max(0, req.anger + anger_delta)
-    sanity = max(0, 100 - new_anger)
+    new_commitment = max(0, req.commitment + commitment_delta)
+    sanity = max(0, 100 - new_commitment)
 
     # If no OpenRouter key, fallback to simple text
     if not OPENROUTER_KEY:
         return {
             "npc_text": "The peasant stares at you silently.",
             "mood": mood,
-            "anger_delta": anger_delta,
-            "anger": new_anger,
+            "commitment_delta": commitment_delta,
+            "commitment": new_commitment,
             "sanity": sanity
         }
 
@@ -434,8 +434,8 @@ def npc_response(req: NPCResponseReq):
         return {
             "npc_text": "The peasant growls and turns away.",
             "mood": mood,
-            "anger_delta": anger_delta,
-            "anger": new_anger,
+            "commitment_delta": commitment_delta,
+            "commitment": new_commitment,
             "sanity": sanity
         }
 
@@ -443,8 +443,8 @@ def npc_response(req: NPCResponseReq):
         return {
             "npc_text": "The peasant clenches his fists in silence.",
             "mood": mood,
-            "anger_delta": anger_delta,
-            "anger": new_anger,
+            "commitment_delta": commitment_delta,
+            "commitment": new_commitment,
             "sanity": sanity
         }
 
@@ -454,7 +454,7 @@ def npc_response(req: NPCResponseReq):
     return {
         "npc_text": npc_text,
         "mood": mood,
-        "anger_delta": anger_delta,
-        "anger": new_anger,
+        "commitment_delta": commitment_delta,
+        "commitment": new_commitment,
         "sanity": sanity
     }
