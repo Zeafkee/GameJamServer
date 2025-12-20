@@ -37,12 +37,7 @@ WEIGHTS = {
     "accountability": 0.10,
     "spiritual": 0.10
 }
-# Map IDs to actual text so the AI understands the scenario
-CONTEXT_MAP = {
-    "c1": "I beat my wife, I'm feeling guilty what should I do?",
-    "c2": "I stole my neighbor's food and I feel guilty.",
-    "c3": "I lied on taxes and might get caught."
-}
+
 
 # blacklist patterns for immediate flagging (case-insensitive)
 BAD_PATTERNS = [
@@ -60,7 +55,7 @@ cache = TTLCache(maxsize=CACHE_SIZE, ttl=CACHE_TTL)
 
 # Request model
 class ScoreReq(BaseModel):
-    contextId: str
+    contextText: str
     playerText: str
 
 def normalize_text(s: str) -> str:
@@ -205,11 +200,8 @@ def health():
 
 @app.post("/score")
 def score(req: ScoreReq):
-    # 1. Resolve the Context ID to actual text
-    raw_id = req.contextId or "none"
-    # If ID exists in map, use the text; otherwise use the ID itself
-    real_context = CONTEXT_MAP.get(raw_id, raw_id) 
-
+    real_context = normalize_text(req.contextText or "")
+    
     player_text_raw = req.playerText or ""
     player_text = normalize_text(player_text_raw)
     
