@@ -37,6 +37,18 @@ WEIGHTS = {
     "accountability": 0.10,
     "spiritual": 0.10
 }
+class NPCResponseReq(BaseModel):
+    contextText: str
+    playerText: str
+    score: int
+    anger: int
+
+class NPCResponseRes(BaseModel):
+    npc_text: str
+    mood: str
+    anger_delta: int
+    anger: int
+    sanity: int
 
 
 # blacklist patterns for immediate flagging (case-insensitive)
@@ -201,7 +213,7 @@ def health():
 @app.post("/score")
 def score(req: ScoreReq):
     real_context = normalize_text(req.contextText or "")
-    
+
     player_text_raw = req.playerText or ""
     player_text = normalize_text(player_text_raw)
     
@@ -325,6 +337,7 @@ def score(req: ScoreReq):
     cache[cache_key] = result
     return result
 
+
 # Optional: small test harness endpoint (returns example contexts)
 @app.get("/examples")
 def examples():
@@ -339,3 +352,109 @@ def examples():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server_openrouter:app", host="127.0.0.1", port=8000, reload=True)
+
+def resolve_mood(score: int):
+    if score >= 70:
+        return "calm", -5
+    elif score >= 50:
+        return "uneasy", +5
+    elif score >= 20:
+        return "angry", +15
+    else:
+        return "enraged", +30
+    
+def build_npc_prompt(context: str, player_answer: str, mood: str) -> str:
+    return f"""
+You are a medieval peasant in a dark moral game.
+
+You are responding emotionally to advice given to you.
+
+RULES:
+- Speak in first person.
+- Be emotionally consistent with this mood: {mood}
+- Do NOT mention scores, numbers, or game mechanics.
+- Do NOT give new advice.
+- Do NOT moralize broadly.
+- Respond with 1–2 short sentences.
+- If mood is angry or enraged, show hostility and instability.
+
+Context:
+"{context}"
+
+Player's advice:
+"{player_answer}"
+
+Your response:
+"""
+@app.post("/npc_response", response_model=NPCResponseRes)
+def npc_response(req: NPCResponseReq):
+    mood, anger_delta = resolve_mood(req.score)
+
+    new_anger = max(0, req.anger + anger_delta)
+    sanity = max(0, 100 - new_anger)
+
+    # If no OpenRouter key, fallback to simple text
+    if not OPENROUTER_KEY:
+        return {
+            "npc_text": "The peasant stares at you silently.",
+            "mood": mood,
+            "anger_delta": anger_delta,
+            "anger": new_anger,
+            "sanity": sanity
+        }
+
+    prompt = build_npc_prompt(
+        normalize_text(req.contextText),
+        normalize_text(req.playerText),
+        mood
+    )
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "SandwichJamServer"
+    }
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [{"role": "system", "content": prompt}],
+        "temperature": 0.7,      # IMPORTANT: allow variation
+        "max_tokens": 80         # Cheap + fast
+    }
+
+    try:
+        r = requests.post(
+            OPENROUTER_URL,
+            headers=headers,
+            json=payload,
+            timeout=12
+        )
+    except Exception:
+        return {
+            "npc_text": "The peasant growls and turns away.",
+            "mood": mood,
+            "anger_delta": anger_delta,
+            "anger": new_anger,
+            "sanity": sanity
+        }
+
+    if r.status_code != 200:
+        return {
+            "npc_text": "The peasant clenches his fists in silence.",
+            "mood": mood,
+            "anger_delta": anger_delta,
+            "anger": new_anger,
+            "sanity": sanity
+        }
+
+    body = r.json()
+    npc_text = body["choices"][0]["message"]["content"].strip()
+
+    return {
+        "npc_text": npc_text,
+        "mood": mood,
+        "anger_delta": anger_delta,
+        "anger": new_anger,
+        "sanity": sanity
+    }
