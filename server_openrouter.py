@@ -355,6 +355,15 @@ if __name__ == "__main__":
 
 def resolve_mood(score: int):
     if score >= 70:
+        return "calm", +5
+    elif score >= 50:
+        return "uneasy", 0
+    elif score >= 20:
+        return "angry", -15
+    else:
+        return "enraged", -30
+
+    if score >= 70:
         return "calm", -5
     elif score >= 50:
         return "uneasy", +5
